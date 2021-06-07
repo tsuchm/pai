@@ -1,4 +1,4 @@
-;円周率計算プログラム  ver5.0
+;円周率計算プログラム  ver5.1
 ;		by JN3GUM
 brocks		=	4
 ;長桁数のデータ領域の必要数（exmath2.hで用いている。）
@@ -42,7 +42,7 @@ data_size	dw	0
 
 		dw	46	;opn_msg のバイト長
 opn_msg		db	0dh,0ah
-		db	"円周率 π 計算プログラム ver5.0  by jn3gum"
+		db	"円周率 π 計算プログラム ver5.1  by jn3gum"
 		db	0dh,0ah
 
 		dw	60	;inp_msg のバイト長
@@ -245,61 +245,82 @@ chr2bin:
 		mov	ecx,es:digit_number	;有効桁数の設定
 		
 conv_loop:	push	ebx
+		push	ecx
 		mov	esi,es:A.status
 		
 ;末尾の０のデータ部分に対する処理の省略
-bin2bcd_skip:	mov	eax,ds:[esi]
+conv_skip:	mov	eax,ds:[esi]
 		add	esi,4
 		or	eax,eax
-		jz	short bin2bcd_skip
+		jz	short conv_skip
 		
 ;無駄な検索を省くための処理
 		sub	esi,4
 		mov	es:A.status,esi
-		xor	bx,bx
+		mov	ebx,100000000
+		xor	ecx,ecx
 		
-;データを１０倍するルーチン
-bin2bcd_loop:	mov	eax,ds:[esi]
-		rcl	bl,1		;BL = キャリーの保存
-		rcl	eax,1		;EAX = データ×２
-		rcl	bl,1
-		mov	edx,eax
-		rcl	edx,1
-		rcl	bl,1
-		rcl	edx,1		;EDX = データ×８
-		rcl	bl,1
-		adc	eax,edx		;EAX = データ×１０
-		rcr	bl,1
-		rcr	bl,1
-		rcr	bl,1
-		rcr	bl,1
+;データを１０００００００倍するルーチン
+mul_loop:	mov	eax,ds:[esi]
+		mul	ebx
+		add	eax,ecx
+		adc	edx,0
+		mov	ecx,edx
 		mov	ds:[esi],eax
 		add	esi,4
 		cmp	esi,ebp		;cmp	esi,data_size*4
-		jnz	bin2bcd_loop
+		jnz	short mul_loop
 		
+		pop	ecx
 		pop	ebx
 		
-;BCDコードをASCIIコードに変換する処理
-		mov	eax,ds:[ebp-4]
+		mov	edx,ds:[ebp-4]
 		mov	ds:[ebp-4],dword ptr 0
+		
+		mov	esi,10000000
+		call	wr_data
+		mov	esi,1000000
+		call	wr_data
+		mov	esi,100000
+		call	wr_data
+		mov	esi,10000
+		call	wr_data
+		mov	esi,1000
+		call	wr_data
+		mov	esi,100
+		call	wr_data
+		mov	esi,10
+		call	wr_data
+		mov	esi,1
+		call	wr_data
+		
+		jmp	conv_loop
+		
+;BCDコードをASCIIコードに変換する処理
+wr_data		proc
+		mov	eax,edx
+		xor	edx,edx
+		div	esi
 		add	al,'0'
 		mov	fs:[edi],al
 		inc	edi
 		dec	ebx
-		jnz	no_return
+		jnz	@f
 		
 ;改行コードを挿入する処理
 		mov	fs:[edi],0a0dh
 		add	edi,2
 		mov	ebx,paper_width
 		
-no_return:	dec	ecx
+@@:		dec	ecx
 		jz	conv_exit
-		jmp	conv_loop
+		ret
+		
+wr_data		endp
 		
 ;２進数から１０進数への変換が終了
-conv_exit:	mov	fs:[edi],0a0dh
+conv_exit:	add	esp,2
+		mov	fs:[edi],0a0dh
 		add	edi,2
 		
 		push	edi		;edi = 出力データ長
